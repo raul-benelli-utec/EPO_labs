@@ -3,6 +3,9 @@ import matplotlib.pyplot as plt
 import datos_circuito as circuito
 from scipy.integrate import quad
 from funciones import *
+import numpy as np
+
+import scipy.integrate as integrate
 
 dos_pi=np.pi*2
 Vm=circuito.Vrms*np.sqrt(2)
@@ -22,10 +25,13 @@ print(f"Valor de C real: {C_real} pico faracdios")
 C_real=C_real*1e-6
 w=dos_pi*circuito.frec
 wrc=w*int(circuito.r)*C_real
+print(f"wrc {wrc}")
+print(f"wcvm {w*C_real*Vm}")
 theta=-np.arctan(wrc)+np.pi
+print(f"theta {theta}")
 alpha=hallar_alpha(theta,w,circuito.r,C_real,0)
 d_vo=Vm*(1-np.sin(alpha))
-
+# Función para la tensión de salida Vo(t)
 def Vo(t):
     wt_mod_period = w*t % dos_pi  # Obtener el valor de wt dentro del período
     
@@ -35,18 +41,36 @@ def Vo(t):
         if 0<=wt_mod_period<alpha:
             wt_mod_period=wt_mod_period+dos_pi
         return Vm*np.sin(theta)*np.exp(-((wt_mod_period)-theta)/(wrc))
-def Vo_rms(Vm, w, alpha, theta):
-    # Define la función para el cuadrado de Vo(t)
-    def Vo_squared(t):
-        return Vo(t) ** 2
 
+# Función para el cuadrado de Vo(t)
+def Vo_squared(t):
+    return Vo(t) ** 2
+
+# Función para calcular el valor RMS de Vo(t)
+def Vo_rms():
     # Calcula la integral numérica para encontrar el valor RMS
-    integral, _ = quad(Vo_squared, 0, 2 * np.pi / w)
+    integral, _ = quad(Vo_squared, 0, 2 * np.pi / w, )
     
     return np.sqrt(integral / (2 * np.pi / w))
 
-# Usar los valores necesarios para calcular Vo_rms
-vo_rms= Vo_rms(Vm, w, alpha, theta)
+def Vo_rms_dos():
+    #Función secundaria para calcular Vo rms, comprobamos que devuelve los mismos resultados
+    f = lambda t : (Vm*np.sin(theta)*np.exp(-((w*t)-theta)/(wrc)))** 2
+    g= lambda t :(Vm*np.sin(w*t))** 2
+    a = theta/w
+    b = dos_pi_m_alpha/w
+    c=dos_pi_m_alpha/w
+    d=(dos_pi+theta)/w
+
+    I = integrate.quad(f,a,b)
+    I2= integrate.quad(g,c,d)
+    
+    Vo_rms= np.sqrt((1/0.02)*(I[0]+I2[0]))
+    print(f"Vo rms dos: {Vo_rms}")
+    return Vo_rms
+#Vo_rms_dos()
+
+vo_rms= Vo_rms()
 
 def Ir(t):
     return Vo(t)/circuito.r
@@ -59,38 +83,49 @@ def Ic(t):
     else:
         if 0<=wt_mod_period<alpha:
             wt_mod_period=wt_mod_period+dos_pi
-        return -(Vm*np.sin(theta)/circuito.r)*np.exp(-((wt_mod_period)-theta)/(wrc))  
-
-
-Ir_p=Vm*(np.sin(alpha)/circuito.r)
-Ic_p=Vm*np.cos(alpha)*w*C_real
-Id_p=Ic_p+Ir_p 
-
+        return -(Vm*np.sin(theta)/circuito.r)*np.exp(-((wt_mod_period)-theta)/(wrc))
+    
 T_rad=dos_pi
-t_div_4=dos_pi/(w*4)
-dos_pi_m_alpha=dos_pi+alpha
-tc=(((dos_pi/(w)))+t_div_4)-(dos_pi_m_alpha/w)
-
-Is_rms=vo_rms/circuito.r
-
-def Vs(t):
-    return Vm * np.sin(w*t)
-
-def I_fuente(t):
-    return Vs(t)/circuito.r
-
-pr=(circuito.Vrms ** 2)/(circuito.r)
-ps=circuito.Vrms*Is_rms
-
-def Fp():
-    return pr/ps
-
 #periodo en segundos 
 T_s=dos_pi/w
 #medio periodo en segundos 
 medioT=T_s/2
 #cuarto periodo en segundos 
 cuartoT=medioT/2
+
+t_div_4=dos_pi/(w*4)
+dos_pi_m_alpha=dos_pi+alpha
+tc=(((dos_pi/(w)))+t_div_4)-(dos_pi_m_alpha/w)
+
+def Ic_rms():
+    #potencia suministrada por la fuente al capacitor en el ciclo de conduccion
+    #calculo rms en el periodo
+    g= lambda wt :(w*C_real*Vm*np.cos(wt))** 2
+    c=alpha
+    d=theta
+
+    I2= integrate.quad(g,c,d)
+    
+    ic_rms= np.sqrt((1/dos_pi)*(I2[0]))
+    print(f"Ic rms: {ic_rms}")
+    return ic_rms
+
+ic_rms=Ic_rms()
+
+Ir_rms=vo_rms/circuito.r
+print(f"Ir rms {Ir_rms}")
+Ir_p=Vm*(np.sin(alpha)/circuito.r)
+Ic_p=Vm*np.cos(alpha)*w*C_real
+Id_p=Ic_p+Ir_p 
+Is_rms=Ir_rms+ic_rms
+def Vs(t):
+    return Vm * np.sin(w*t)
+
+def Fp():
+    pr=(vo_rms ** 2)/(circuito.r)
+    ps=circuito.Vrms*Is_rms
+    return pr/ps
+
 
 def imprimir_resultados():
     print("Rectificador de media onda con filtro capacitivo.")
@@ -103,12 +138,14 @@ def imprimir_resultados():
     print("\n")
     print("Valores calculados:")
     print("Alpha: "+imprimir_valor(alpha,"rad"))
+    print("Theta: ",imprimir_valor(theta,"rad"))
     print("Delta Vo calculado: "+ imprimir_valor(d_vo,"V"))
     print(f"Vm {round(Vm,2)} V")
     print("Vs(theta): "+ imprimir_valor(Vm*np.sin(theta),"V"))
-    
     print("Vo rms: "+imprimir_valor(vo_rms,"V"))
     print("Is_rms: "+ imprimir_valor(Is_rms,"A"))
+    print("Ic_rms: "+ imprimir_valor(ic_rms,"A"))
+    print("Ir_rms: "+ imprimir_valor(Ir_rms,"A"))
     print("Ir pico: "+ imprimir_valor(Ir_p,"A"))
     print("Ic pico: "+ imprimir_valor(Ic_p,"A"))
     print("Id pico: "+ imprimir_valor(Id_p,"A"))
@@ -131,7 +168,6 @@ def graficar(periodos=1,bloquear=False,nombre="False",tansparente=False):
     graf_v.plot([i/puntos for i in x], [Vo(i/puntos) for i in x],label ='Vo(t)')
     graf_i.plot([i/puntos for i in x], [Ic(i/puntos) for i in x],label ='Ic(t)')
     graf_i.plot([i/puntos for i in x], [Ir(i/puntos) for i in x],label ='Ir(t)')
-    graf_i.plot([i/puntos for i in x], [I_fuente(i/puntos) for i in x],label ='Is(t)')
 
     for i in range(0,4):
         graf_i.axvline(x=((dos_pi/(w))*i)+t_div_4, color='black', linestyle='--',linewidth=0.5)
@@ -176,5 +212,5 @@ def graficar(periodos=1,bloquear=False,nombre="False",tansparente=False):
         plt.savefig(f'{nombre}.png', dpi=500, bbox_inches='tight', transparent=tansparente)
     plt.show(block=bloquear) 
 
-graficar(6.5,nombre="rect_media_onda_6 periodos")
-graficar(1,True,nombre="rect_media_onda_ periodo")
+#graficar(6.5,nombre="rect_media_onda_6 periodos")
+#graficar(1,True,nombre="rect_media_onda_ periodo")

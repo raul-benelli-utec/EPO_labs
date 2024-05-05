@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import datos_circuito as circuito
 from scipy.integrate import quad
+import scipy.integrate as integrate
 from funciones import *
 
 dos_pi=np.pi*2
@@ -27,7 +28,24 @@ wrc=w*int(circuito.r)*C_real
 theta=-np.arctan(wrc)+np.pi
 alpha=hallar_alpha(theta,w,circuito.r,C_real,0,media_onda=False)
 d_vo=Vm*(1-np.sin(alpha))
+dos_pi_m_alpha=dos_pi+alpha
 
+#periodo fuente
+T_rad=dos_pi
+t_div_4=dos_pi/(w*4)
+dos_pi_m_alpha=dos_pi+alpha
+tc=(((dos_pi/(w)))+t_div_4)-(dos_pi_m_alpha/w)
+#periodo en segundos fuente
+T_s=dos_pi/w
+#medio periodo en segundos 
+medioT=T_s/2
+#cuarto periodo en segundos 
+cuartoT=medioT/2
+
+#periodo salida
+To_rad=np.pi
+#periodo salida en segundos
+To_s=np.pi/w
 
 def Vo(t):
     #funcion a trozos en base a las caracteristicas del circuito
@@ -39,7 +57,7 @@ def Vo(t):
             wt_mod_period=wt_mod_period+np.pi
         return Vm*np.sin(theta)*np.exp(-((wt_mod_period)-theta)/(wrc))
     
-def Vo_rms(w):
+def Vo_rms():
     # Define la función para el cuadrado de Vo(t)
     def Vo_cuadrado(t):
         return Vo(t) ** 2
@@ -53,10 +71,8 @@ def Vs(t):
     #Valor en función del tiempo
     return Vm * np.sin(w*t)
 
-def I_fuente(t):
-    return Vs(t)/circuito.r
 
-vo_rms = Vo_rms(w)
+vo_rms = Vo_rms()
 
 def Ir(t):
     return Vo(t)/circuito.r
@@ -72,56 +88,55 @@ def Ic(t):
             wt_mod_period=wt_mod_period+dos_pi
         return -(Vm*np.sin(theta)/circuito.r)*np.exp(-((wt_mod_period)-theta)/(wrc))   
 
-def I_fuente(t):
-    return Vs(t)/circuito.r
+def Ic_rms():
+    #potencia suministrada por la fuente al capacitor en el ciclo de conduccion
+    #calculo rms en el periodo
+    g= lambda wt :(w*C_real*Vm*np.cos(wt))** 2
+    c=alpha
+    d=theta
 
+    I2= integrate.quad(g,c,d)
+    
+    ic_rms= np.sqrt((1/To_rad)*(I2[0]))
+    print(f"Ic rms: {ic_rms}")
+    return ic_rms
 
+ic_rms=Ic_rms()
 
-
+Ir_rms=vo_rms/circuito.r
 Ir_p=Vm*(np.sin(alpha)/circuito.r)
 Ic_p=Vm*np.cos(alpha)*w*C_real
 Id_p=Ic_p+Ir_p 
-Is_rms=vo_rms/circuito.r
-
-dos_pi_m_alpha=dos_pi+alpha
-
-pr=(circuito.Vrms ** 2)/(circuito.r)
-ps=circuito.Vrms*Is_rms
-
-T_rad=dos_pi
-t_div_4=dos_pi/(w*4)
-dos_pi_m_alpha=dos_pi+alpha
-tc=(((dos_pi/(w)))+t_div_4)-(dos_pi_m_alpha/w)
-
-#periodo en segundos 
-T_s=dos_pi/w
-#medio periodo en segundos 
-medioT=T_s/2
-#cuarto periodo en segundos 
-cuartoT=medioT/2
 
 
+Is_rms=Ir_rms+ic_rms
 def Fp():
+    pr=(vo_rms ** 2)/(circuito.r)
+    ps=circuito.Vrms*Is_rms
     return pr/ps
-    
+
+
 
 def imprimir_resultados():
-    print("Rectificador de onda completa con filtro capacitivo.")
+    print("Rectificador de media onda con filtro capacitivo.")
     print("\n")
     print("Datos:")
     print("Vs rms: "+imprimir_valor(circuito.Vrms,"V"))
     print("Frecuencia : ", imprimir_valor(circuito.frec,"Hz"))
     print("Resistencia: ", imprimir_valor(circuito.r, "Ω"))
-    print("Periodo",imprimir_valor(T_s,"s"))
+    print("Periodo de fuente",imprimir_valor(T_s,"s"))
+    print("Periodo de Salida",imprimir_valor(To_s,"s"))
     print("\n")
     print("Valores calculados:")
     print("Alpha: "+imprimir_valor(alpha,"rad"))
+    print("Theta: ",imprimir_valor(theta,"rad"))
     print("Delta Vo calculado: "+ imprimir_valor(d_vo,"V"))
     print(f"Vm {round(Vm,2)} V")
     print("Vs(theta): "+ imprimir_valor(Vm*np.sin(theta),"V"))
-    
     print("Vo rms: "+imprimir_valor(vo_rms,"V"))
     print("Is_rms: "+ imprimir_valor(Is_rms,"A"))
+    print("Ic_rms: "+ imprimir_valor(ic_rms,"A"))
+    print("Ir_rms: "+ imprimir_valor(Ir_rms,"A"))
     print("Ir pico: "+ imprimir_valor(Ir_p,"A"))
     print("Ic pico: "+ imprimir_valor(Ic_p,"A"))
     print("Id pico: "+ imprimir_valor(Id_p,"A"))
@@ -129,6 +144,7 @@ def imprimir_resultados():
     print(f"T carga capacitor: "+ imprimir_valor(tc,"s"))
     print(f"T descarga capacitor: "+ imprimir_valor((T_s-tc),"s"))
     print("Factor de potencia: "+ imprimir_valor(Fp()))
+
 
 imprimir_resultados()
 
@@ -144,7 +160,7 @@ def graficar(periodos=1,bloquear=False,nombre="False",tansparente=False):
     graf_v.plot([i/puntos for i in x], [Vo(i/puntos) for i in x],label ='Vo(t)')
     graf_i.plot([i/puntos for i in x], [Ic(i/puntos) for i in x],label ='Ic(t)')
     graf_i.plot([i/puntos for i in x], [Ir(i/puntos) for i in x],label ='Ir(t)')
-    graf_i.plot([i/puntos for i in x], [I_fuente(i/puntos) for i in x],label ='Is(t)')
+    #graf_i.plot([i/puntos for i in x], [I_fuente(i/puntos) for i in x],label ='Is(t)')
 
     for i in range(0,4):
         graf_i.axvline(x=((dos_pi/(w))*i)+t_div_4, color='black', linestyle='--',linewidth=0.5)
@@ -189,61 +205,7 @@ def graficar(periodos=1,bloquear=False,nombre="False",tansparente=False):
         plt.savefig(f'{nombre}.png', dpi=500, bbox_inches='tight', transparent=tansparente)
     plt.show(block=bloquear) 
 
-graficar(6.5,nombre="rectificador onda completa 6 periodos")
-graficar(1,True,nombre="rectificador onda completa 1 periodo")
+#graficar(6.5,nombre="rectificador onda completa 6 periodos")
+#graficar(1,True,nombre="rectificador onda completa 1 periodo")
 
 
-"""
-print(f"cuartoT {cuartoT}, medioT {medioT}")
-for i in range(0,4):
-    ax1.axvline(x=((T)*i)+cuartoT, color='pink', linestyle=':')
-ax1.axvline(x=(dos_pi_m_alpha/w), color='blue', linestyle='--')
-for i in range(0,4):
-    ax2.axvline(x=((dos_pi/(w))*i)+cuartoT, color='green', linestyle=':')
-
-ax2.axvline(x=0.04, color='red', linestyle='--',linewidth=0.5)
-ax2.axvline(x=0.02, color='red', linestyle='--',linewidth=0.5)
-ax2.axvline(x=(dos_pi_m_alpha/w), color='blue', linestyle=':',linewidth=0.5)
-ax2.axvline(x=((1.5*dos_pi/w)+(alpha/w)), color='blue', linestyle=':',linewidth=1.5)
-ax2.axvline(x=(((5*dos_pi)/4*w)), color='blue', linestyle=':',linewidth=1.5)
-ax2.axhline(y=0, color='blue',linestyle='-')
-ax2.axhline(y=Vm, color='green', linestyle=':')
-ax2.axhline(y=Vm-d_vo, color='green', linestyle=':')
-ax1.set_xlim([0, 0.09])
-ax2.set_xlim([0, 0.09])
-
-print(f"W: {w}, dos_pi/w {dos_pi/w}, dos_pi_m_alpha/w {dos_pi_m_alpha/w}")
-bbox_props = dict(boxstyle='round,pad=0.5', fc='white', ec='black', lw=1, alpha=0.5)
-ax1.set_title('Subgráfico 1: Corriente')
-ax2.set_title('Subgráfico 2: Voltajes')
-
-# Añadir un título al gráfico completo
-fig.suptitle('Rectificador de onda completa con filtro capacitivo', fontsize=16)
-
-plt.legend()
-ax1.legend()
-ax2.legend()
-plt.tight_layout()
-plt.show()
-#Gráficar
-x = list(range(0, 401, 1))
-
-fig, (ax1, ax2) = plt.subplots(2)
-
-ax2.plot([i/5000 for i in x], [Vs(i/5000) for i in x],label ='Vs(t)')
-ax2.plot([i/5000 for i in x], [Vo(i/5000) for i in x],label ='Vo(t)')
-ax1.plot([i/5000 for i in x], [Ic(i/5000) for i in x],label ='Ic(t)')
-ax1.plot([i/5000 for i in x], [Ir(i/5000) for i in x],label ='Ir(t)')
-ax1.plot([i/5000 for i in x], [I_fuente(i/5000) for i in x],label ='Is(t)')
-
-#ax.axvline(x=0.02, color='red', linestyle='--', label='Línea vertical en x=0.2')
-#lineas verticales 
-#periodo en segundos 
-T=dos_pi/w
-#medio periodo en segundos 
-medioT=T/2
-#cuarto periodo en segundos 
-cuartoT=medioT/2
-
-
-"""
